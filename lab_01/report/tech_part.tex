@@ -1,0 +1,246 @@
+\chapter{Технологическая часть}
+
+\section{Средства реализации}
+
+Для реализации алгоритмов умножения матриц был выбран язык программирования $C$, поскольку он соответствует требованиям лабораторной работы. Измерение времени выполнения алгоритмов осуществлялось с использованием функции \texttt{clock\_gettime()} из библиотеки \texttt{time.h}, которая обеспечивает высокую точность измерений. Разработка программного обеспечения проводилась в интегрированной среде разработки CLion.
+
+\section{Реализация алгоритмов}
+
+Были реализованы классический алгоритм умножения матриц (листинг 3.1), алгоритм Винограда (листинг 3.2) и оптимизированный алгоритм Винограда (листинг 3.3).
+
+\begin{lstlisting}[caption={Классический алгоритм}, label={lst:standard}]
+Matrix standard_multiplication(const Matrix *A, const Matrix *B) {
+	Matrix C = {0};
+	
+	if (A->cols != B->rows) {
+		printf("Error: matrix dimensions mismatch (%d != %d)\n", A->cols, B->rows);
+		return C;
+	}
+	
+	if (A->rows <= 0 || A->cols <= 0 || B->rows <= 0 || B->cols <= 0) {
+		printf("Error: matrix dimensions must be positive\n");
+		return C;
+	}
+	
+	create_matrix(&C, A->rows, B->cols);
+	
+	int n = A->rows;
+	int m = B->cols;
+	int p = A->cols;
+	for (int i = 0; i < n; ++i) {
+		for (int j = 0; j < m; ++j) {
+			for (int k = 0; k < p; ++k) {
+				C.data[i][j] += A->data[i][k] * B->data[k][j];
+			}
+		}
+	}
+	
+	return C;
+}
+\end{lstlisting}
+
+
+\begin{lstlisting}[caption={Алгоритм Винограда}, label={lst:vinograd}]
+Matrix vinograd_multiplication(const Matrix *A, const Matrix *B) {
+	Matrix C = {0};
+	
+	if (A->cols != B->rows) {
+		printf("Error: matrix dimensions mismatch (%d != %d)\n", A->cols, B->rows);
+		return C;
+	}
+	
+	if (A->rows <= 0 || A->cols <= 0 || B->rows <= 0 || B->cols <= 0) {
+		printf("Error: matrix dimensions must be positive\n");
+		return C;
+	}
+	
+	create_matrix(&C, A->rows, B->cols);
+	
+	int n = A->rows;
+	int m = A->cols;
+	int p = B->cols;
+	
+	int *MulH = (int*)calloc((size_t)n, sizeof(int));
+	int *MulV = (int*)calloc((size_t)p, sizeof(int));
+	
+	for (int i = 0; i < n; ++i) {
+		for (int j = 0; j < m / 2; ++j) {
+			MulH[i] += A->data[i][2 * j] * A->data[i][2 * j + 1];
+		}
+	}
+	
+	for (int i = 0; i < p; ++i) {
+		for (int j = 0; j < m / 2; ++j) {
+			MulV[i] += B->data[2 * j][i] * B->data[2 * j + 1][i];
+		}
+	}
+	
+	for (int i = 0; i < n; ++i) {
+		for (int j = 0; j < p; ++j) {
+			C.data[i][j] = -MulH[i] - MulV[j];
+			for (int k = 0; k < m / 2; ++k) {
+				C.data[i][j] += (A->data[i][2 * k] + B->data[2 * k + 1][j]) * (A->data[i][2 * k + 1] + B->data[2 * k][j]);
+			}
+		}
+	}
+	
+	if (m % 2 == 1) {
+		for (int i = 0; i < n; ++i) {
+			for (int j = 0; j < p; ++j) {
+				C.data[i][j] += A->data[i][m - 1] * B->data[m - 1][j];
+			}
+		}
+	}
+	
+	free(MulH);
+	free(MulV);
+	
+	return C;
+}
+\end{lstlisting}
+
+
+\begin{lstlisting}[caption={Оптимизированный алгоритм Винограда}, label={lst:optimized_vinograd}]
+Matrix optimized_vinograd_multiplication(const Matrix *A, const Matrix *B) {
+	Matrix C = {0};
+	
+	if (A->cols != B->rows) {
+		printf("Error: matrix dimensions mismatch (%d != %d)\n", A->cols, B->rows);
+		return C;
+	}
+	
+	if (A->rows <= 0 || A->cols <= 0 || B->rows <= 0 || B->cols <= 0) {
+		printf("Error: matrix dimensions must be positive\n");
+		return C;
+	}
+	
+	create_matrix(&C, A->rows, B->cols);
+	
+	const int n = A->rows;
+	const int m = A->cols;
+	const int p = B->cols;
+	
+	const int halfM = m >> 1;
+	const int hasOdd = (m & 1);
+	
+	int *MulH = (int*)calloc((size_t)n, sizeof(int));
+	int *MulV = (int*)calloc((size_t)p, sizeof(int));
+	
+	for (int i = 0; i < n; ++i) {
+		for (int j = 0; j < halfM; ++j) {
+			MulH[i] += A->data[i][j << 1] * A->data[i][(j << 1) + 1];
+		}
+	}
+	
+	for (int i = 0; i < p; ++i) {
+		for (int j = 0; j < halfM; ++j) {
+			MulV[i] += B->data[j << 1][i] * B->data[(j << 1) + 1][i];
+		}
+	}
+	
+	for (int i = 0; i < n; ++i) {
+		for (int j = 0; j < p; ++j) {
+			C.data[i][j] = -MulH[i] - MulV[j];
+			for (int k = 0; k < halfM; ++k) {
+				C.data[i][j] += (A->data[i][k << 1] + B->data[(k << 1) + 1][j]) * (A->data[i][(k << 1) + 1] + B->data[k << 1][j]);
+			}
+		}
+	}
+	
+	if (hasOdd) {
+		const int last = m - 1;
+		for (int i = 0; i < n; ++i) {
+			const int aLast = A->data[i][last];
+			for (int j = 0; j < p; ++j) {
+				C.data[i][j] += aLast * B->data[last][j];
+			}
+		}
+	}
+	
+	free(MulH);
+	free(MulV);
+	
+	return C;
+}
+\end{lstlisting}
+\section{Функциональные тесты}
+
+В данном разделе представлены функциональные тесты для разработанных алгоритмов умножения матриц: классического алгоритма (таблица 3.1), алгоритма Винограда (таблица 3.2) и оптимизированного алгоритма Винограда (таблица 3.3). Тесты включают проверку корректности вычислений для различных размеров матриц и обработку ошибочных входных данных.
+
+\begin{table}[H]
+	\centering
+	\caption{Функциональные тесты для классического алгоритма}
+	\begin{tabular}{|c|c|c|c|}
+		\hline
+		\textbf{Матрица A} & \textbf{Матрица B} & \textbf{Ожидаемый результат} & \textbf{Полученный результат}\\
+		\hline
+		$\left( \begin{matrix} 3 \end{matrix} \right)$ & $\left( \begin{matrix} 7 \end{matrix} \right)$ & $\left( \begin{matrix} 21 \end{matrix} \right)$ & $\left( \begin{matrix} 21 \end{matrix} \right)$ \\
+		\hline
+		$\left( \begin{matrix} 2 & 4 & 6 \end{matrix} \right)$ & $\left( \begin{matrix} 3 & 5 & 7 \end{matrix} \right)$ & Error message  & Error message\\
+		\hline
+		$\left( \begin{matrix} 2 & 3 \\ 4 & 5 \end{matrix} \right)$ & $\left( \begin{matrix} 1 & 2 & 3 \\ 4 & 5 & 6 \\ 7 & 8 & 9 \end{matrix} \right)$ & Error message  & Error message\\
+		\hline
+		$\left( \begin{matrix} 2 & 3 \\ 4 & 5 \end{matrix} \right)$ & $\left( \begin{matrix} 2 & 2 \\ 2 & 2 \end{matrix} \right)$ & $\left( \begin{matrix} 10 & 10 \\ 18 & 18 \end{matrix} \right)$ & $\left( \begin{matrix} 10 & 10 \\ 18 & 18 \end{matrix} \right)$ \\
+		\hline
+		$\left( \begin{matrix} 2 & 3 & 4 \\ 5 & 6 & 7 \end{matrix} \right)$ & $\left( \begin{matrix} 1 & 2 \\ 3 & 4 \\ 5 & 6 \end{matrix} \right)$ & $\left( \begin{matrix} 31 & 40 \\ 58 & 76 \end{matrix} \right)$ & $\left( \begin{matrix} 31 & 40 \\ 58 & 76 \end{matrix} \right)$ \\
+		\hline
+		$\left( \begin{matrix} 4 \\ 6 \\ 8 \end{matrix} \right)$ & $\left( \begin{matrix} 3 & 5 & 2 \end{matrix} \right)$ & $\left( \begin{matrix} 12 & 20 & 8 \\ 18 & 30 & 12 \\ 24 & 40 & 16 \end{matrix} \right)$ & $\left( \begin{matrix} 12 & 20 & 8 \\ 18 & 30 & 12 \\ 24 & 40 & 16 \end{matrix} \right)$ \\
+		\hline
+	\end{tabular}
+	\label{standart_tests}
+\end{table}
+
+\begin{table}[H]
+	\centering
+	\caption{Функциональные тесты для алгоритма Винограда}
+	\begin{tabular}{|c|c|c|c|}
+		\hline
+		\textbf{Матрица A} & \textbf{Матрица B} & \textbf{Ожидаемый результат} & \textbf{Полученный результат}\\
+		\hline
+		$\left( \begin{matrix} 3 \end{matrix} \right)$ & $\left( \begin{matrix} 7 \end{matrix} \right)$ & $\left( \begin{matrix} 21 \end{matrix} \right)$ & $\left( \begin{matrix} 21 \end{matrix} \right)$ \\
+		\hline
+		$\left( \begin{matrix} 2 & 4 & 6 \end{matrix} \right)$ & $\left( \begin{matrix} 3 & 5 & 7 \end{matrix} \right)$ & Error message  & Error message\\
+		\hline
+		$\left( \begin{matrix} 2 & 3 \\ 4 & 5 \end{matrix} \right)$ & $\left( \begin{matrix} 1 & 2 & 3 \\ 4 & 5 & 6 \\ 7 & 8 & 9 \end{matrix} \right)$ & Error message  & Error message\\
+		\hline
+		$\left( \begin{matrix} 2 & 3 \\ 4 & 5 \end{matrix} \right)$ & $\left( \begin{matrix} 2 & 2 \\ 2 & 2 \end{matrix} \right)$ & $\left( \begin{matrix} 10 & 10 \\ 18 & 18 \end{matrix} \right)$ & $\left( \begin{matrix} 10 & 10 \\ 18 & 18 \end{matrix} \right)$ \\
+		\hline
+		$\left( \begin{matrix} 2 & 3 & 4 \\ 5 & 6 & 7 \end{matrix} \right)$ & $\left( \begin{matrix} 1 & 2 \\ 3 & 4 \\ 5 & 6 \end{matrix} \right)$ & $\left( \begin{matrix} 31 & 40 \\ 58 & 76 \end{matrix} \right)$ & $\left( \begin{matrix} 31 & 40 \\ 58 & 76 \end{matrix} \right)$ \\
+		\hline
+		$\left( \begin{matrix} 4 \\ 6 \\ 8 \end{matrix} \right)$ & $\left( \begin{matrix} 3 & 5 & 2 \end{matrix} \right)$ & $\left( \begin{matrix} 12 & 20 & 8 \\ 18 & 30 & 12 \\ 24 & 40 & 16 \end{matrix} \right)$ & $\left( \begin{matrix} 12 & 20 & 8 \\ 18 & 30 & 12 \\ 24 & 40 & 16 \end{matrix} \right)$ \\
+		\hline
+	\end{tabular}
+	\label{winograd_tests}
+\end{table}
+
+\begin{table}[H]
+	\centering
+	\caption{Функциональные тесты для оптимизированного алгоритма Винограда}
+	\begin{tabular}{|c|c|c|c|}
+		\hline
+		\textbf{Матрица A} & \textbf{Матрица B} & \textbf{Ожидаемый результат} & \textbf{Полученный результат}\\
+		\hline
+		$\left( \begin{matrix} 3 \end{matrix} \right)$ & $\left( \begin{matrix} 7 \end{matrix} \right)$ & $\left( \begin{matrix} 21 \end{matrix} \right)$ & $\left( \begin{matrix} 21 \end{matrix} \right)$ \\
+		\hline
+		$\left( \begin{matrix} 2 & 4 & 6 \end{matrix} \right)$ & $\left( \begin{matrix} 3 & 5 & 7 \end{matrix} \right)$ & Error message  & Error message\\
+		\hline
+		$\left( \begin{matrix} 2 & 3 \\ 4 & 5 \end{matrix} \right)$ & $\left( \begin{matrix} 1 & 2 & 3 \\ 4 & 5 & 6 \\ 7 & 8 & 9 \end{matrix} \right)$ & Error message  & Error message\\
+		\hline
+		$\left( \begin{matrix} 2 & 3 \\ 4 & 5 \end{matrix} \right)$ & $\left( \begin{matrix} 2 & 2 \\ 2 & 2 \end{matrix} \right)$ & $\left( \begin{matrix} 10 & 10 \\ 18 & 18 \end{matrix} \right)$ & $\left( \begin{matrix} 10 & 10 \\ 18 & 18 \end{matrix} \right)$ \\
+		\hline
+		$\left( \begin{matrix} 2 & 3 & 4 \\ 5 & 6 & 7 \end{matrix} \right)$ & $\left( \begin{matrix} 1 & 2 \\ 3 & 4 \\ 5 & 6 \end{matrix} \right)$ & $\left( \begin{matrix} 31 & 40 \\ 58 & 76 \end{matrix} \right)$ & $\left( \begin{matrix} 31 & 40 \\ 58 & 76 \end{matrix} \right)$ \\
+		\hline
+		$\left( \begin{matrix} 4 \\ 6 \\ 8 \end{matrix} \right)$ & $\left( \begin{matrix} 3 & 5 & 2 \end{matrix} \right)$ & $\left( \begin{matrix} 12 & 20 & 8 \\ 18 & 30 & 12 \\ 24 & 40 & 16 \end{matrix} \right)$ & $\left( \begin{matrix} 12 & 20 & 8 \\ 18 & 30 & 12 \\ 24 & 40 & 16 \end{matrix} \right)$ \\
+		\hline
+	\end{tabular}
+	\label{opt_winograd_tests}
+\end{table}
+
+Все функциональные тесты были успешно пройдены.
+\section*{Вывод}
+
+В данном разделе были реализованы три алгоритма умножения матриц на языке программирования C: классический алгоритм, алгоритм Винограда и оптимизированный алгоритм Винограда. Все алгоритмы включают проверку корректности входных данных и обработку ошибок.
+
+Проведённые функциональные тесты подтвердили корректность работы всех реализованных алгоритмов.
+
+\clearpage
