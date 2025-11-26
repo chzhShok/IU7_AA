@@ -1,0 +1,68 @@
+\chapter{Исследовательская часть}
+
+\section{Граф управление}
+\subsection{Нерекурсивный алгоритм}
+\begin{figure}[h!]\label{iterative_cfg} 
+	\center{\includegraphics[scale=0.6]{./images/cfg_iterative.png}} 
+	\caption{Граф управления нерекурсивного алгоритма}
+\end{figure}
+
+\subsection{Рекурсивный алгоритм}
+\begin{figure}[h!]\label{recursive_cfg} 
+	\center{\includegraphics[scale=0.6]{./images/cfg_recursive.png}} 
+	\caption{Граф управления нерекурсивного алгоритма}
+\end{figure} 
+
+\section{Информационный граф}
+\subsection{Нерекурсивный алгоритм}
+\begin{figure}[h!]\label{info_graph_iterative} 
+	\center{\includegraphics[scale=0.6]{./images/info_graph_iterative.png}} 
+	\caption{Граф управления нерекурсивного алгоритма}
+\end{figure}
+
+\subsection{Рекурсивный алгоритм}
+\begin{figure}[h!]\label{info_graph_recursive} 
+	\center{\includegraphics[scale=0.6]{./images/info_graph_recursive.png}} 
+	\caption{Граф управления нерекурсивного алгоритма}
+\end{figure}
+
+\section{Операционная история}
+\subsection{Нерекурсивный алгоритм}
+\begin{figure}[h!]\label{opt_history_iterative} 
+	\center{\includegraphics[scale=0.5]{./images/opt_history_iterative.png}} 
+	\caption{Граф управления нерекурсивного алгоритма}
+\end{figure}
+
+\subsection{Рекурсивный алгоритм}
+\begin{figure}[h!]\label{opt_history_recurcive} 
+	\center{\includegraphics[scale=0.5]{./images/opt_history_recurcive.png}} 
+	\caption{Граф управления нерекурсивного алгоритма}
+\end{figure}
+
+\section{Информационная история}
+\subsection{Нерекурсивный алгоритм}
+\begin{figure}[h!]\label{info_history_iterative} 
+	\center{\includegraphics[scale=0.5]{./images/info_history_iterative.png}} 
+	\caption{Граф управления нерекурсивного алгоритма}
+\end{figure}
+
+\subsection{Рекурсивный алгоритм}
+\begin{figure}[h!]\label{info_history_recurcive} 
+	\center{\includegraphics[scale=0.5]{./images/info_history_recurcive.png}} 
+	\caption{Граф управления нерекурсивного алгоритма}
+\end{figure}
+
+\section{Распараллеливание}
+\subsection{Нерекурсивный алгоритм}
+Нерекурсивный алгоритм не получится сделать параллельным, поскольку каждая итерация цикла зависит от результатов предыдущих: обновление переменной \texttt{count} требует знания её текущего значения, а условие досрочного завершения \texttt{break} создаёт управляющую зависимость, которая делает невозможным предсказание количества выполняемых итераций. Таким образом, все итерации образуют строго последовательную цепочку.
+
+\subsection{Рекурсивный алгоритм}
+Рекурсивный алгоритм не получится сделать параллельным, поскольку каждый рекурсивный вызов зависит от результата предыдущего: вычисление суммы требует полного завершения всех последующих рекурсивных вызовов. Таким образом, все вызовы образуют строго последовательную цепочку, где каждый шаг должен дождаться результата следующего перед тем как вернуть своё значение.
+
+\section*{Вывод}
+
+В данном разделе были построены граф управления, информационный граф,
+операционная история и информационная история нерекурсивного и рекурсивного алгоритмов. Была проанализирована возможность параллельных вычислений для нерекурсивного и рекурсивного
+алгоритмов.
+
+\clearpage
