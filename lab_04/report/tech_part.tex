@@ -1,0 +1,348 @@
+\chapter{Технологическая часть}
+
+\section{Средства реализации}
+
+Для реализации алгоритмов поиска кратчайших путей был выбран язык программирования \texttt{C++20}, поскольку он соответствует требованиям лабораторной работы и предоставляет необходимые средства для работы с нативными потоками и синхронизацией. Измерение времени выполнения алгоритмов осуществлялось с использованием структуры из стандартной библиотеки \texttt{std::chrono::steady\_clock}. Разработка проводилась в среде \texttt{CLion}.
+
+\section{Инструменты разработки}
+
+\subsection{Используемые библиотеки}
+Все реализации структур данных используют исключительно стандартную библиотеку C++20:
+\begin{itemize}
+	\item \texttt{std::thread} -- для создания и управления нативными потоками;
+	\item \texttt{std::mutex}, \texttt{std::unique\_lock}, \texttt{std::lock\_guard} -- для синхронизации доступа к разделяемым данным;
+	\item \texttt{std::condition\_variable} -- для уведомления потоков о появлении новых задач;
+	\item \texttt{std::atomic} -- для атомарных операций с разделяемыми переменными;
+	\item \texttt{std::priority\_queue} -- для реализации очередей с приоритетом;
+	\item \texttt{std::vector} -- для хранения графа и рабочих структур;
+	\item \texttt{std::atomic\_flag}, \texttt{std::memory\_order} -- для низкоуровневой синхронизации.
+\end{itemize}
+
+\section{Реализации структур данных}
+
+\subsection{Структура Node}
+\begin{lstlisting}[language=C++,caption={Листинг структуры Node}]
+	class Node {
+		public:
+		uint64_t dist;
+		int v;
+		
+		bool operator>(const Node &o) const {
+			return dist > o.dist;
+		}
+	};
+\end{lstlisting}
+
+\subsection{Множественные очереди (WorkQueue)}
+\begin{lstlisting}[language=C++,caption={Листинг структуры WorkQueue}]
+	class WorkQueue {
+		public:
+		std::priority_queue<Node, std::vector<Node>, std::greater<Node>> pq;
+		std::mutex m;
+		std::atomic<int> approx_size{0};
+	};
+\end{lstlisting}
+
+\subsection{Реализация мьютекса}
+Используется стандартная реализация \texttt{std::mutex} из библиотеки \texttt{<mutex>}.
+
+\subsection{Реализация атомарных операций}
+Используется \texttt{std::atomic} с параметром памяти \texttt{memory\_order\_relaxed}.
+
+\subsection{Реализация условной переменной}
+Используется \texttt{std::condition\_variable} для синхронизации потоков.
+
+\section{Полные листинги ключевых функций}
+
+\begin{lstlisting}[language=C++,caption={Полный листинг функции push\_to}]
+	auto push_to = [&](int owner, const Node &nd) {
+		if (owner < 0 || owner >= threads) {
+			owner = 0;
+		}
+		
+		{
+			std::lock_guard<std::mutex> lg(queues[owner].m);
+			queues[owner].pq.push(nd);
+			queues[owner].approx_size.fetch_add(1, std::memory_order_relaxed);
+		}
+		tasks.fetch_add(1, std::memory_order_relaxed);
+		cv.notify_one();
+	};
+\end{lstlisting}
+
+\begin{lstlisting}[language=C++,caption={Полный листинг функции pop\_local}]
+	auto pop_local = [&](int idx, Node &out) -> bool {
+		if (queues[idx].approx_size.load(std::memory_order_relaxed) == 0) {
+			return false;
+		}
+		
+		std::unique_lock<std::mutex> lk(queues[idx].m);
+		if (queues[idx].pq.empty()) {
+			queues[idx].approx_size.store(0, std::memory_order_relaxed);
+			return false;
+		}
+		
+		out = queues[idx].pq.top();
+		queues[idx].pq.pop();
+		queues[idx].approx_size.fetch_sub(1, std::memory_order_relaxed);
+		return true;
+	};
+\end{lstlisting}
+
+\begin{lstlisting}[language=C++,caption={Полный листинг функции steal\_from}]
+	auto steal_from = [&](int idx, Node &out) -> bool {
+		if (threads <= 1) {
+			return false;
+		}
+		
+		int start = random_thread();
+		for (int attempt = 0; attempt < threads; ++attempt) {
+			int target = (start + attempt) % threads;
+			if (target == idx) {
+				continue;
+			}
+			
+			if (queues[target].approx_size.load(std::memory_order_relaxed) == 0) {
+				continue;
+			}
+			
+			std::unique_lock<std::mutex> lk(queues[target].m, std::try_to_lock);
+			if (!lk.owns_lock()) {
+				continue;
+			}
+			
+			if (queues[target].pq.empty()) {
+				queues[target].approx_size.store(0, std::memory_order_relaxed);
+				continue;
+			}
+			
+			out = queues[target].pq.top();
+			queues[target].pq.pop();
+			queues[target].approx_size.fetch_sub(1, std::memory_order_relaxed);
+			return true;
+		}
+		return false;
+	};
+\end{lstlisting}
+
+\begin{lstlisting}[language=C++,caption={Полный листинг функции try\_pop}]
+	auto try_pop = [&](int idx, Node &out) -> bool {
+		if (pop_local(idx, out)) {
+			return true;
+		}
+		
+		return steal_from(idx, out);
+	};
+\end{lstlisting}
+
+\begin{lstlisting}[language=C++,caption={Полный листинг функции worker}]
+	auto worker = [&](int idx) {
+		Node cur;
+		while (true) {
+			if (!try_pop(idx, cur)) {
+				if (tasks.load(std::memory_order_relaxed) == 0 && 
+				active.load(std::memory_order_relaxed) == 0) {
+					done.store(true, std::memory_order_relaxed);
+					cv.notify_all();
+					break;
+				}
+				
+				std::unique_lock<std::mutex> lk(cv_m);
+				cv.wait(lk, [&]() {
+					return tasks.load(std::memory_order_relaxed) > 0 || 
+					done.load(std::memory_order_relaxed);
+				});
+				
+				if (tasks.load(std::memory_order_relaxed) == 0 && 
+				active.load(std::memory_order_relaxed) == 0) {
+					break;
+				}
+				
+				continue;
+			}
+			
+			tasks.fetch_sub(1, std::memory_order_relaxed);
+			
+			uint64_t curd = dist[cur.v].load(std::memory_order_relaxed);
+			if (cur.dist != curd) {
+				if (tasks.load(std::memory_order_relaxed) == 0 && 
+				active.load(std::memory_order_relaxed) == 0) {
+					done.store(true, std::memory_order_relaxed);
+					cv.notify_all();
+				}
+				continue;
+			}
+			
+			active.fetch_add(1, std::memory_order_relaxed);
+			
+			for (auto [to, w]: g_.adj[cur.v]) {
+				uint64_t nd = curd + w;
+				uint64_t old = dist[to].load(std::memory_order_relaxed);
+				
+				while (nd < old) {
+					if (dist[to].compare_exchange_weak(old, nd, 
+					std::memory_order_relaxed)) {
+						parent[to].store(cur.v, std::memory_order_relaxed);
+						int owner = threads > 0 ? (to % threads) : 0;
+						push_to(owner, Node{nd, to});
+						break;
+					}
+				}
+			}
+			
+			active.fetch_sub(1, std::memory_order_relaxed);
+			
+			if (tasks.load(std::memory_order_relaxed) == 0 && 
+			active.load(std::memory_order_relaxed) == 0) {
+				done.store(true, std::memory_order_relaxed);
+				cv.notify_all();
+			}
+		}
+	};
+\end{lstlisting}
+
+\section{Порядок работы с вспомогательными потоками}
+
+\subsection{Создание потоков}
+\begin{lstlisting}[language=C++,caption={Создание и управление потоками}]
+	std::vector<std::thread> pool;
+	pool.reserve(threads);
+	for (int t = 0; t < threads; ++t) {
+		pool.emplace_back(worker, t);
+	}
+	
+	for (auto &th : pool) {
+		th.join();
+	}
+\end{lstlisting}
+
+\subsection{Синхронизация и завершение}
+Для координации работы потоков используются:
+\begin{itemize}
+	\item \textbf{счётчик задач} (\texttt{std::atomic<long long> tasks}) -- отслеживает количество активных задач;
+	\item \textbf{счётчик активных потоков} (\texttt{std::atomic<int> active}) -- отслеживает количество потоков, обрабатывающих вершины;
+	\item \textbf{флаг завершения} (\texttt{std::atomic<bool> done}) -- сигнализирует о завершении работы;
+	\item \textbf{условная переменная} (\texttt{std::condition\_variable cv}) -- для уведомления потоков о новых задачах;
+	\item \textbf{мьютекс} (\texttt{std::mutex cv\_m}) -- для синхронизации доступа к условной переменной.
+\end{itemize}
+
+\section{Функциональные тесты}
+
+В данном разделе представлены функциональные тесты для разработанных алгоритмов: последовательный алгоритм Дейкстры (таблица 3.1) и параллельный алгоритм Дейкстры (таблица 3.2).
+
+\begin{table}[h!]
+	\centering
+	\caption{Функциональные тесты для последовательного алгоритма Дейкстры}
+	\label{table:functional_tests_sequential}
+	\begin{tabular}{|p{0.8cm}|p{3.2cm}|p{3.5cm}|p{3.5cm}|}
+		\hline
+		№ & Входные данные & Ожидаемый результат & Полученный результат \\
+		\hline
+		1 & Граф: A->B[2], A->C[1]; 
+		Старт: A; 
+		Цели: B, C & 
+		Расстояния: B=2, C=1; 
+		Кратчайший: C=1 & 
+		Расстояния: B=2, C=1 ;
+		Кратчайший: C=1 \\
+		\hline
+		2 & Граф: A->B[3], B->C[1], A->C[5];
+		Старт: A; 
+		Цели: C & 
+		Расстояние: C=4; 
+		Путь: A->B->C & 
+		Расстояние: C=4;
+		Путь: A->B->C \\
+		\hline
+		3 & Граф: A->B[1], B->C[1], C->D[1]; 
+		Старт: A; 
+		Цели: D & 
+		Расстояние: D=3; 
+		Путь: A->B->C->D & 
+		Расстояние: D=3; 
+		Путь: A->B->C->D \\
+		\hline
+		4 & Граф: A->B[2], C->D[1]; 
+		Старт: A; 
+		Цели: D & 
+		Расстояние: D=$\infty$ & 
+		Расстояние: D=$\infty$ \\
+		\hline
+		5 & Граф: A->A[1]; 
+		Старт: A; 
+		Цели: A & 
+		Расстояние: A=0; 
+		Путь: A & 
+		Расстояние: A=0; 
+		Путь: A \\
+		\hline
+	\end{tabular}
+\end{table}
+
+\begin{table}[h!]
+	\centering
+	\caption{Функциональные тесты для параллельного алгоритма Дейкстры}
+	\label{table:functional_tests_parallel}
+	\begin{tabular}{|p{0.8cm}|p{3.2cm}|p{3.5cm}|p{3.5cm}|}
+		\hline
+		№ & Входные данные & Ожидаемый результат & Полученный результат \\
+		\hline
+		1 & Граф: A->B[2], A->C[1] 
+		Старт: A 
+		Цели: B, C 
+		Потоки: 4 & 
+		Расстояния: B=2, C=1 
+		Кратчайший: C=1 & 
+		Расстояния: B=2, C=1 
+		Кратчайший: C=1 \\
+		\hline
+		2 & Граф: A->B[3], B->C[1], A->C[5] 
+		Старт: A 
+		Цели: C 
+		Потоки: 2 & 
+		Расстояние: C=4 
+		Путь: A->B->C & 
+		Расстояние: C=4 
+		Путь: A->B->C \\
+		\hline
+		3 & Граф: A->B[1], B->C[1], C->D[1] 
+		Старт: A 
+		Цели: D 
+		Потоки: 8 & 
+		Расстояние: D=3 
+		Путь: A->B->C->D & 
+		Расстояние: D=3 
+		Путь: A->B->C->D \\
+		\hline
+		4 & Граф: A->B[2], C->D[1] 
+		Старт: A 
+		Цели: D 
+		Потоки: 4 & 
+		Расстояние: D=$\infty$ & 
+		Расстояние: D=$\infty$ \\
+		\hline
+		5 & Граф: A->A[1] 
+		Старт: A 
+		Цели: A 
+		Потоки: 2 & 
+		Расстояние: A=0 
+		Путь: A & 
+		Расстояние: A=0 
+		Путь: A \\
+		\hline
+	\end{tabular}
+\end{table}
+
+\vspace{30pt}
+
+\section*{Вывод}
+
+В технологической части были реализованы последовательный и параллельный алгоритмы Дейкстры на языке C++20 с использованием стандартной библиотеки. Для параллельной версии разработаны специализированные структуры данных и реализованы примитивы синхронизации. 
+
+В параллельной реализации использован механизм work-stealing с множественными очередями, где каждая очередь имеет приблизительный счетчик размера для оптимизации работы. Добавлен счетчик активных потоков для более точного определения момента завершения алгоритма.
+
+Функциональные тесты подтвердили корректность работы обоих алгоритмов на различных типах графов.
+
+Все реализации соответствуют требованиям задания.
+
+\clearpage

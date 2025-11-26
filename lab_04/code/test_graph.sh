@@ -1,0 +1,1 @@
+./build/lab04 data/graph_test.dot "0" "1,5,6,10,11,14" 0 {"start":"0","targets":["1","5","6","10","11","14"],"threads":0,"algo":"seq","time_ms":1,"distances":{"1":120,"5":28,"6":92,"10":35,"11":106,"14":63},"shortest":{"target":"5","distance":28,"path":["0","5"]}}

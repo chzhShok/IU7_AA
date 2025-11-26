@@ -13,3 +13,7 @@
 cargo
 target/
 *.backup
+build/
+cmake-build-debug/
+data/
+venv/
