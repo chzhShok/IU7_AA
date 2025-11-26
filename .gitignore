@@ -5,3 +5,10 @@
 *.gz
 *.toc
 *.exe
+.idea/
+*.bkp
+*.synctex(busy)
+/target/
+**/*.rs.bk
+cargo
+target/
