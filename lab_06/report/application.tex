@@ -1,0 +1,176 @@
+\ssr{ПРИЛОЖЕНИЕ А}
+\setcounter{table}{0}
+\renewcommand{\thetable}{А.\arabic{table}}
+ Для каждой комбинации параметров в строке файла содержатся значения:
+\begin{itemize}
+	\item коэффициент влияния феромона $\alpha$;
+	\item коэффициент влияния эвристики $\beta$;
+	\item коэффициент испарения феромона $\rho$;
+	\item число итераций $t_{max}$;
+	\item оптимальная длина маршрута $L^\ast$, найденная алгоритмом полного перебора;
+	\item отклонение $L - L^\ast$ длины маршрута, найденного муравьиным алгоритмом, от оптимального значения.
+\end{itemize}
+
+\begin{longtable}{|c|c|c|c|r|r|}
+\caption{Результаты параметризации муравьиного алгоритма}\label{tbl:parametrization} \\
+	\hline
+	$\alpha$ & $\beta$ & $\rho$ & $t_{max}$ & $L^\ast$ & $L - L^\ast$ \\
+	\hline
+	\endfirsthead
+	\hline
+	$\alpha$ & $\beta$ & $\rho$ & $t_{max}$ & $L^\ast$ & $L - L^\ast$ \\
+	\hline
+	\endhead
+	\hline
+	\endfoot
+	\hline
+	\endlastfoot
+	0.1 & 0.9 & 0.1 & 100 & 95 & 3 \\
+	0.1 & 0.9 & 0.1 & 300 & 95 & 0 \\
+	0.1 & 0.9 & 0.1 & 500 & 95 & 0 \\
+	0.1 & 0.9 & 0.2 & 100 & 95 & 3 \\
+	0.1 & 0.9 & 0.2 & 300 & 95 & 0 \\
+	0.1 & 0.9 & 0.2 & 500 & 95 & 2 \\
+	0.1 & 0.9 & 0.5 & 100 & 95 & 4 \\
+	0.1 & 0.9 & 0.5 & 300 & 95 & 0 \\
+	0.1 & 0.9 & 0.5 & 500 & 95 & 0 \\
+	0.1 & 0.9 & 0.9 & 100 & 95 & 4 \\
+	0.1 & 0.9 & 0.9 & 300 & 95 & 0 \\
+	0.1 & 0.9 & 0.9 & 500 & 95 & 0 \\
+	0.2 & 0.8 & 0.1 & 100 & 95 & 3 \\
+	0.2 & 0.8 & 0.1 & 300 & 95 & 0 \\
+	0.2 & 0.8 & 0.1 & 500 & 95 & 2 \\
+	0.2 & 0.8 & 0.2 & 100 & 95 & 9 \\
+	0.2 & 0.8 & 0.2 & 300 & 95 & 3 \\
+	0.2 & 0.8 & 0.2 & 500 & 95 & 2 \\
+	0.2 & 0.8 & 0.5 & 100 & 95 & 5 \\
+	0.2 & 0.8 & 0.5 & 300 & 95 & 0 \\
+	0.2 & 0.8 & 0.5 & 500 & 95 & 0 \\
+	0.2 & 0.8 & 0.9 & 100 & 95 & 4 \\
+	0.2 & 0.8 & 0.9 & 300 & 95 & 0 \\
+	0.2 & 0.8 & 0.9 & 500 & 95 & 0 \\
+	0.5 & 0.5 & 0.1 & 100 & 95 & 6 \\
+	0.5 & 0.5 & 0.1 & 300 & 95 & 2 \\
+\end{longtable}
+
+\begin{longtable}{|c|c|c|c|r|r|}
+\caption{Продолжение таблицы~\ref{tbl:parametrization}} \\
+	\hline
+	$\alpha$ & $\beta$ & $\rho$ & $t_{max}$ & $L^\ast$ & $L - L^\ast$ \\
+	\hline
+	\endfirsthead
+	\hline
+	$\alpha$ & $\beta$ & $\rho$ & $t_{max}$ & $L^\ast$ & $L - L^\ast$ \\
+	\hline
+	\endhead
+	\hline
+	\endfoot
+	\hline
+	\endlastfoot
+	0.5 & 0.5 & 0.1 & 500 & 95 & 0 \\
+	0.5 & 0.5 & 0.2 & 100 & 95 & 3 \\
+	0.5 & 0.5 & 0.2 & 300 & 95 & 0 \\
+	0.5 & 0.5 & 0.2 & 500 & 95 & 0 \\
+	0.5 & 0.5 & 0.5 & 100 & 95 & 0 \\
+	0.5 & 0.5 & 0.5 & 300 & 95 & 3 \\
+	0.5 & 0.5 & 0.5 & 500 & 95 & 0 \\
+	0.5 & 0.5 & 0.9 & 100 & 95 & 5 \\
+	0.5 & 0.5 & 0.9 & 300 & 95 & 3 \\
+	0.5 & 0.5 & 0.9 & 500 & 95 & 2 \\
+	0.9 & 0.1 & 0.1 & 100 & 95 & 12 \\
+	0.9 & 0.1 & 0.1 & 300 & 95 & 5 \\
+	0.9 & 0.1 & 0.1 & 500 & 95 & 0 \\
+	0.9 & 0.1 & 0.2 & 100 & 95 & 9 \\
+	0.9 & 0.1 & 0.2 & 300 & 95 & 2 \\
+	0.9 & 0.1 & 0.2 & 500 & 95 & 2 \\
+	0.9 & 0.1 & 0.5 & 100 & 95 & 3 \\
+	0.9 & 0.1 & 0.5 & 300 & 95 & 5 \\
+	0.9 & 0.1 & 0.5 & 500 & 95 & 0 \\
+	0.9 & 0.1 & 0.9 & 100 & 95 & 10 \\
+	0.9 & 0.1 & 0.9 & 300 & 95 & 8 \\
+	0.9 & 0.1 & 0.9 & 500 & 95 & 5 \\
+\end{longtable}
+
+\clearpage
+
+\begin{table}[h]
+	\centering
+	\caption{Матрица расстояний для полной карты Африки}
+	\label{app:big_matrix}
+	\small
+	\renewcommand{\arraystretch}{1.2}
+	$\left(\begin{array}{@{}*{11}{c}@{}}
+		0    & 2326 & 4309 & 1949 & 1999 & 3369 & 5109 & 2232 & 4963 & 4570 & 4985 \\
+		2326 & 0    & 2025 & 3587 & 2028 & 1830 & 3031 & 2120 & 3674 & 3107 & 4164 \\
+		4309 & 2025 & 0    & 5571 & 3822 & 2665 & 2330 & 3050 & 3080 & 2214 & 3750 \\
+		1949 & 3587 & 5571 & 0    & 1920 & 3649 & 5555 & 1663 & 4983 & 4891 & 4810 \\
+		1999 & 2028 & 3822 & 1920 & 0    & 1740 & 3646 & 950  & 3806 & 3624 & 4101 \\
+		3369 & 1830 & 2665 & 3649 & 1740 & 0    & 1907 & 1302 & 2720 & 2464 & 3427 \\
+		5109 & 3031 & 2330 & 5555 & 3646 & 1907 & 0    & 2388 & 1665 & 1195 & 2774 \\
+		2232 & 2120 & 3050 & 1663 & 950  & 1302 & 2388 & 0    & 3391 & 3492 & 3646 \\
+		4963 & 3674 & 3080 & 4983 & 3806 & 2720 & 1665 & 3391 & 0    & 1059 & 1612 \\
+		4570 & 3107 & 2214 & 4891 & 3624 & 2464 & 1195 & 3492 & 1059 & 0    & 2227 \\
+		4985 & 4164 & 3750 & 4810 & 4101 & 3427 & 2774 & 3646 & 1612 & 2227 & 0
+	\end{array}\right)$
+\end{table}
+
+\clearpage
+
+\begin{lstlisting}[label=lst:ant,caption={Муравьиный алгоритм},captionpos=b]
+def ant_algorithm_path(
+    matrix: np.ndarray,
+    alpha: float,
+    beta: float,
+    evaporation: float,
+    days: int,
+) -> tuple[float, list[int]]:
+    n = matrix.shape[0]
+    ants = n
+
+    q = _average_edge_weight(matrix)
+    pheromones = _init_pheromones(n)
+    visibility = _init_visibility(matrix)
+
+    best_length = float("inf")
+    best_path: list[int] = []
+
+    for _ in range(days):
+        starts = list(range(n))
+        visited = [[start] for start in starts]
+
+        for ant_index in range(ants):
+            while len(visited[ant_index]) < n:
+                probs = _transition_probabilities(
+                    pheromones, visibility, visited,
+                    ant_index, alpha, beta,
+                )
+                next_city = _choose_next_city(probs)
+
+                if next_city in visited[ant_index]:
+                    unvisited = [
+                        c for c in range(n)
+                        if c not in visited[ant_index]
+                    ]
+                    if not unvisited:
+                        break
+                    next_city = unvisited[0]
+
+                visited[ant_index].append(next_city)
+
+            length = _calc_path_length(matrix, visited[ant_index])
+            if length < best_length:
+                best_length = length
+                best_path = visited[ant_index].copy()
+
+        pheromones = _update_pheromones(
+            matrix=matrix,
+            paths=visited,
+            pheromones=pheromones,
+            q=q,
+            evaporation=evaporation,
+        )
+
+    return best_length, best_path
+\end{lstlisting}
+
+\clearpage
