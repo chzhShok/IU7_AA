@@ -1,0 +1,49 @@
+\chapter{Конструкторская часть}
+
+\section{Поток обработки}
+
+Разрабатываемое программное обеспечение представляет собой консольное приложение, которое принимает на вход путь к PDF-файлу или каталогу и проверяет документы на наличие смешения типов нумерации иллюстрирующих элементов.
+
+\begin{figure}[h]
+	\centering
+	\includegraphics[scale=0.5]{images/deepseek_1.png}
+	\caption{Алгоритм программы, написанной Deepseek, часть 1}
+	\label{fig:deepseek_1}
+\end{figure}
+
+\begin{figure}[h]
+	\centering
+	\includegraphics[scale=0.5]{images/deepseek_2.png}
+	\caption{Алгоритм программы, написанной Deepseek, часть 2}
+	\label{fig:deepseek_2}
+\end{figure}
+
+\clearpage
+
+\begin{figure}[h]
+	\centering
+	\includegraphics[scale=0.33]{images/gemini.png}
+	\caption{Алгоритм программы, написанной Gemini}
+	\label{fig:gemini}
+\end{figure}
+
+\clearpage
+
+\begin{figure}[h]
+	\centering
+	\includegraphics[scale=0.33]{images/gpt.png}
+	\caption{Алгоритм программы, написанной GPT}
+	\label{fig:gpt}
+\end{figure}
+
+\clearpage
+
+\section{Процесс взаимодействия с LLM}
+
+Для взаимодействия с моделями использовался единый подробный промпт, описывающий постановку задачи, требования к использованию \texttt{PyPDF2} и регулярных выражений, а также формат ожидаемого результата. Один и тот же промпт последовательно отправлялся нескольким LLM; в ответ на него каждая модель предлагала собственный, независимый вариант решения.
+
+\section*{Вывод}
+
+В конструкторской части были приведены схемы алгоритмов, написанных Deepseek, Gemini-3, GPT-5.1. Также был описан процесс взаимодействия с LLM.
+
+\clearpage

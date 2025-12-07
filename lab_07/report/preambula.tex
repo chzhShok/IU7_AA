@@ -1,0 +1,187 @@
+\documentclass[a4paper, 12pt]{extreport}
+
+\usepackage[T2A]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english,russian]{babel}
+\usepackage{amssymb,amsfonts,amsmath,mathtext,cite,enumerate,float}
+\usepackage{pgfplots}
+\usepackage{graphicx}
+\usepackage{tocloft}
+\usepackage{caption}
+\usepackage{tempora}
+\usepackage{titlesec}
+\usepackage{setspace}
+\usepackage{geometry}
+\usepackage{indentfirst}
+\usepackage{pdfpages}
+\usepackage{threeparttable}
+\usepackage{hyperref}
+\usepackage{flafter}
+\usepackage{enumitem}
+\usepackage{multirow}
+\usepackage{longtable}
+\usepackage{listings}
+
+\usepackage[figure,table]{totalcount}
+\usepackage{lastpage}
+
+\pgfplotsset{compat=1.18}
+
+\setlist{nosep}
+
+\newcommand{\ssr}[1]{\begin{center}
+		\LARGE\bfseries{#1}
+	\end{center} \addcontentsline{toc}{chapter}{#1}  }
+
+\makeatletter
+\renewcommand\LARGE{\@setfontsize\LARGE{22pt}{20}}
+\renewcommand\Large{\@setfontsize\Large{20pt}{20}}
+\renewcommand\large{\@setfontsize\large{16pt}{20}}
+\makeatother
+
+\RequirePackage{titlesec}
+\titleformat{\chapter}[block]{\hspace{\parindent}\large\bfseries}{\thechapter}{0.5em}{\large\bfseries\raggedright}
+\titleformat{name=\chapter,numberless}[block]{\hspace{\parindent}}{}{0pt}{\large\bfseries\centering}
+\titleformat{\section}[block]{\hspace{\parindent}\large\bfseries}{\thesection}{0.5em}{\large\bfseries\raggedright}
+\titleformat{\subsection}[block]{\hspace{\parindent}\large\bfseries}{\thesubsection}{0.5em}{\large\bfseries\raggedright}
+\titleformat{\subsubsection}[block]{\hspace{\parindent}\large\bfseries}{\thesubsection}{0.5em}{\large\bfseries\raggedright}
+\titlespacing{\chapter}{12.5mm}{-22pt}{10pt}
+\titlespacing{\section}{12.5mm}{10pt}{10pt}
+\titlespacing{\subsection}{12.5mm}{10pt}{10pt}
+\titlespacing{\subsubsection}{12.5mm}{10pt}{10pt}
+
+\makeatletter
+\renewcommand{\@biblabel}[1]{#1.}
+\makeatother
+
+\geometry{left=30mm}
+\geometry{right=10mm}
+\geometry{top=20mm}
+\geometry{bottom=20mm}
+
+\onehalfspacing
+
+\renewcommand{\theenumi}{\arabic{enumi}}
+\renewcommand{\labelenumi}{\arabic{enumi}\text{)}}
+\renewcommand{\theenumii}{.\arabic{enumii}}
+\renewcommand{\labelenumii}{\asbuk{enumii}\text{)}}
+\renewcommand{\theenumiii}{.\arabic{enumiii}}
+\renewcommand{\labelenumiii}{\arabic{enumi}.\arabic{enumii}.\arabic{enumiii}.}
+
+\renewcommand{\cftchapleader}{\cftdotfill{\cftdotsep}}
+
+\addto\captionsrussian{\renewcommand{\figurename}{Рисунок}}
+\DeclareCaptionLabelSeparator{dash}{~---~}
+\captionsetup{labelsep=dash}
+
+\captionsetup[figure]{justification=centering,labelsep=dash}
+\captionsetup[table]{labelsep=dash,justification=raggedright,singlelinecheck=off}
+
+\graphicspath{{images/}}
+
+\newcommand{\floor}[1]{\lfloor #1 \rfloor}
+
+\lstset{
+	inputencoding=utf8,
+	extendedchars=true,
+	keepspaces=true,
+	language=Python,
+	basicstyle=\small\ttfamily,
+	numbers=none,
+	numberstyle=\tiny,
+	stepnumber=1,
+	showspaces=false,
+	showstringspaces=false,
+	showtabs=false,
+	frame=single,
+	tabsize=2,
+	captionpos=t,
+	breaklines=true,
+	breakatwhitespace=false,
+	escapeinside={\#*}{*)},
+	abovecaptionskip=-5pt,
+	morecomment=[s]{"""}{"""},
+	morecomment=[l]{\#},
+	literate=
+	{А}{{\cyra}}1
+	{Б}{{\cyrb}}1
+	{В}{{\cyrv}}1
+	{Г}{{\cyrg}}1
+	{Д}{{\cyrd}}1
+	{Е}{{\cyre}}1
+	{Ё}{{\cyryo}}1
+	{Ж}{{\cyrzh}}1
+	{З}{{\cyrz}}1
+	{И}{{\cyri}}1
+	{Й}{{\cyrishrt}}1
+	{К}{{\cyrk}}1
+	{Л}{{\cyrl}}1
+	{М}{{\cyrm}}1
+	{Н}{{\cyrn}}1
+	{О}{{\cyro}}1
+	{П}{{\cyrp}}1
+	{Р}{{\cyrr}}1
+	{С}{{\cyrs}}1
+	{Т}{{\cyrt}}1
+	{У}{{\cyru}}1
+	{Ф}{{\cyrf}}1
+	{Х}{{\cyrh}}1
+	{Ц}{{\cyrc}}1
+	{Ч}{{\cyrch}}1
+	{Ш}{{\cyrsh}}1
+	{Щ}{{\cyrshch}}1
+	{Ъ}{{\cyrhrdsn}}1
+	{Ы}{{\cyrery}}1
+	{Ь}{{\cyrsftsn}}1
+	{Э}{{\cyrerev}}1
+	{Ю}{{\cyryu}}1
+	{Я}{{\cyrya}}1
+	{а}{{\cyra}}1
+	{б}{{\cyrb}}1
+	{в}{{\cyrv}}1
+	{г}{{\cyrg}}1
+	{д}{{\cyrd}}1
+	{е}{{\cyre}}1
+	{ё}{{\cyryo}}1
+	{ж}{{\cyrzh}}1
+	{з}{{\cyrz}}1
+	{и}{{\cyri}}1
+	{й}{{\cyrishrt}}1
+	{к}{{\cyrk}}1
+	{л}{{\cyrl}}1
+	{м}{{\cyrm}}1
+	{н}{{\cyrn}}1
+	{о}{{\cyro}}1
+	{п}{{\cyrp}}1
+	{р}{{\cyrr}}1
+	{с}{{\cyrs}}1
+	{т}{{\cyrt}}1
+	{у}{{\cyru}}1
+	{ф}{{\cyrf}}1
+	{х}{{\cyrh}}1
+	{ц}{{\cyrc}}1
+	{ч}{{\cyrch}}1
+	{ш}{{\cyrsh}}1
+	{щ}{{\cyrshch}}1
+	{ъ}{{\cyrhrdsn}}1
+	{ы}{{\cyrery}}1
+	{ь}{{\cyrsftsn}}1
+	{э}{{\cyrerev}}1
+	{ю}{{\cyryu}}1
+	{я}{{\cyrya}}1
+}
+
+\pgfplotsset{width=0.85\linewidth, height=0.5\columnwidth}
+
+\linespread{1.3}
+
+\parindent=1.25cm
+
+\def\labelitemi{---}
+\setlist[itemize]{leftmargin=1.25cm, itemindent=0.65cm}
+\setlist[enumerate]{leftmargin=1.25cm, itemindent=0.55cm}
+
+\newcommand{\specialcell}[2][c]{%
+	\begin{tabular}[#1]{@{}c@{}}#2\end{tabular}}
+
+\frenchspacing

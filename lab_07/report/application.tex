@@ -1,0 +1,735 @@
+\chapter*{ПРИЛОЖЕНИЕ А}
+\addcontentsline{toc}{chapter}{ПРИЛОЖЕНИЕ А}
+
+В данном приложении приведены фрагменты исходного кода, сгенерированного различными большими языковыми моделями и использованного при реализации лабораторной работы.
+
+\section*{А.1. Реализация DeepSeek}
+\label{app:deepseek}
+
+\begin{lstlisting}[language=Python,caption={Фрагмент реализации DeepSeek},captionpos=b]
+ILLUSTRATION_KEYWORDS = [
+    r"рис\.?",
+    r"рисунок",
+    r"табл\.?",
+    r"таблица",
+    r"fig\.?",
+    r"figure",
+    r"table",
+]
+
+LABEL_REGEX = re.compile(
+    rf"""
+    (?P<keyword>{'|'.join(ILLUSTRATION_KEYWORDS)})  
+    \s*                                            
+    (?P<number>\d+(?:\.\d+)*)                      
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+
+def _normalize_kind(keyword: str) -> str:
+    kw = keyword.lower()
+    if kw.startswith(("рис", "fig")):
+        return "figure"
+    if kw.startswith(("таб", "table")):
+        return "table"
+    return "other"
+
+
+def _detect_scheme(number: str) -> str:
+    return "sectional" if "." in number else "global"
+
+
+def _extract_labels(pdf_path: str) -> List[Dict]:
+    items: List[Dict] = []
+
+    with open(pdf_path, "rb") as file:
+        reader = PyPDF2.PdfReader(file)
+
+        for page_index, page in enumerate(reader.pages, start=1):
+            text = page.extract_text() or ""
+            lines = text.splitlines()
+
+            for line_index, line in enumerate(lines, start=1):
+                for match in LABEL_REGEX.finditer(line):
+                    keyword = match.group("keyword")
+                    number = match.group("number")
+                    raw = match.group(0).strip()
+
+                    kind = _normalize_kind(keyword)
+                    scheme = _detect_scheme(number)
+
+                    items.append(
+                        {
+                            "raw_label": raw,
+                            "kind": kind,
+                            "scheme": scheme,
+                            "number": number,
+                            "page": page_index,
+                            "line": line_index,
+                        }
+                    )
+
+    return items
+
+
+def check_numbering_mixing(pdf_path: str) -> Tuple[bool, List[Dict]]:
+    try:
+        labels = _extract_labels(pdf_path)
+    except Exception as e:
+        print(f"Error while processing file {pdf_path}: {e}")
+        return False, []
+
+    if not labels:
+        return False, []
+
+    scheme_counter = Counter(label["scheme"] for label in labels)
+    if len(scheme_counter) <= 1:
+        elements_info: List[Dict] = []
+        for lbl in labels:
+            elements_info.append(
+                {
+                    "original_name": lbl["raw_label"],
+                    "type": lbl["kind"],
+                    "number": lbl["number"],
+                    "numbering_type": lbl["scheme"],
+                    "page": lbl["page"],
+                    "line": lbl["line"],
+                    "description": lbl["raw_label"],
+                }
+            )
+        return False, elements_info
+
+    dominant_scheme, _ = scheme_counter.most_common(1)[0]
+    offending_schemes = {s for s in scheme_counter.keys() if s != dominant_scheme}
+
+    has_mixing = False
+    elements_info: List[Dict] = []
+
+    for lbl in labels:
+        is_offending = lbl["scheme"] in offending_schemes
+        if is_offending:
+            has_mixing = True
+
+        info = {
+            "original_name": lbl["raw_label"],
+            "type": lbl["kind"],
+            "number": lbl["number"],
+            "numbering_type": lbl["scheme"],
+            "page": lbl["page"],
+            "line": lbl["line"],
+            "description": lbl["raw_label"],
+            "is_offending": is_offending,
+        }
+        elements_info.append(info)
+
+    if has_mixing:
+        mixing_details = [
+            "Detected mixed numbering schemes for illustration elements.",
+            f"Dominant scheme: {dominant_scheme}",
+            "Offending schemes: " + ", ".join(sorted(offending_schemes)),
+        ]
+        for info in elements_info:
+            info["mixing_details"] = mixing_details
+
+    return has_mixing, elements_info
+\end{lstlisting}
+
+\section*{А.2. Реализация Gemini-3}
+\label{app:gemini}
+
+\begin{lstlisting}[language=Python,caption={Фрагмент реализации Gemini-3},captionpos=b]
+def check_mixed_numbering(pdf_path: str) -> Tuple[bool, List[Tuple[str, int, int]]]:
+    sequential_regex = re.compile(r'(?:Рисунок|Таблица|Figure|Table)\s+\d+(?!\.)\b', re.IGNORECASE)
+    section_regex = re.compile(r'(?:Рисунок|Таблица|Figure|Table)\s+\d+(\.\d+)+', re.IGNORECASE)
+
+    sequential_matches = []
+    section_matches = []
+
+    try:
+        with open(pdf_path, 'rb') as file:
+            reader = PyPDF2.PdfReader(file)
+            for page_num, page in enumerate(reader.pages):
+                text = page.extract_text()
+                
+                if not text:
+                    continue
+                
+                lines = text.split('\n')
+                for line_num, line in enumerate(lines):
+                    for match in sequential_regex.finditer(line):
+                        sequential_matches.append((match.group(0), page_num + 1, line_num + 1))
+
+                    for match in section_regex.finditer(line):
+                        section_matches.append((match.group(0), page_num + 1, line_num + 1))
+
+    except FileNotFoundError:
+        print(f"Error: file not found: {pdf_path}")
+        return False, []
+    except Exception as e:
+        print(f"Error while processing file {pdf_path}: {e}")
+        return False, []
+
+    is_mixed = bool(sequential_matches and section_matches)
+    all_matches = sequential_matches + section_matches if is_mixed else []
+    all_matches.sort(key=lambda x: (x[1], x[2]))
+
+    return is_mixed, all_matches
+
+def print_results(pdf_file_path: str, is_mixed: bool, findings: List[Tuple[str, int, int]]):
+    print("\n" + "="*50)
+    print(f"      Analysis results for file: {os.path.basename(pdf_file_path)}")
+    print("="*50)
+    print(f"Full path: {pdf_file_path}")
+    print(f"Mixed numbering detected: {'Yes' if is_mixed else 'No'}")
+
+    if is_mixed and findings:
+        first_finding = findings[0]
+        print(f"Coordinates of first finding: Page {first_finding[1]}, line {first_finding[2]}")
+        print("\nAll found instances:")
+        for find in findings:
+            print(f"  - '{find[0]}' (Page {find[1]}, line {find[2]})")
+    else:
+        print("Coordinates of first finding: -")
+    print("="*50)
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: python main.py <path_to_PDF_file_or_directory>")
+        sys.exit(1)
+        
+    input_path = sys.argv[1]
+
+    if not os.path.exists(input_path):
+        print(f"Error: The specified path does not exist: {input_path}")
+        sys.exit(1)
+
+    pdf_files_to_process = []
+    if os.path.isdir(input_path):
+        print(f"Analysis of directory: {input_path}")
+        pdf_files_to_process.extend(
+            [os.path.join(input_path, f) for f in os.listdir(input_path) if f.lower().endswith('.pdf')]
+        )
+        if not pdf_files_to_process:
+            print("No PDF files found in the specified directory.")
+            sys.exit(0)
+    elif os.path.isfile(input_path):
+        if input_path.lower().endswith('.pdf'):
+            pdf_files_to_process.append(input_path)
+        else:
+            print("Error: The specified file is not a PDF file.")
+            sys.exit(1)
+    
+    print(f"\nFound for processing: {len(pdf_files_to_process)} PDF file(s).")
+    
+    for pdf_file_path in pdf_files_to_process:
+        is_mixed, findings = check_mixed_numbering(pdf_file_path)
+        print_results(pdf_file_path, is_mixed, findings)
+
+if __name__ == "__main__":
+    main()
+\end{lstlisting}
+
+\section*{А.3. Итоговая реализация GPT~5.1}
+\label{app:gpt51}
+
+\begin{lstlisting}[language=Python,caption={Модуль проверки нумерации GPT~5.1},captionpos=b]
+@dataclass
+class MatchLocation:
+    page: int  
+    line: int  
+
+
+@dataclass
+class NumberingMatch:
+    raw_label: str
+    kind: str
+    scheme: str
+    location: MatchLocation
+
+
+ILLUSTRATION_KEYWORDS = [
+    r"рис\.?",  
+    r"рисунок",
+    r"табл\.?",  
+    r"таблица",
+    r"fig\.?",  
+    r"figure",
+    r"table",
+]
+
+LABEL_REGEX = re.compile(
+    rf"""
+    (?P<keyword>{'|'.join(ILLUSTRATION_KEYWORDS)})  
+    \s*                                            
+    (?P<number>\d+(?:\.\d+)*)                      
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+
+def _normalize_kind(keyword: str) -> str:
+    kw = keyword.lower()
+    if kw.startswith(("рис", "fig")):
+        return "figure"
+    if kw.startswith(("таб", "table")):
+        return "table"
+    return "other"
+
+
+def _detect_scheme(number: str) -> str:
+    return "sectional" if "." in number else "global"
+
+
+def iter_labels_in_page_text(page_text: str, page_number: int) -> Iterable[NumberingMatch]:
+    if not page_text:
+        return []
+
+    matches: List[NumberingMatch] = []
+
+    lines = page_text.splitlines()
+    for line_index, line in enumerate(lines, start=1):
+        for m in LABEL_REGEX.finditer(line):
+            keyword = m.group("keyword")
+            number = m.group("number")
+            kind = _normalize_kind(keyword)
+            scheme = _detect_scheme(number)
+            raw_label = m.group(0)
+
+            matches.append(
+                NumberingMatch(
+                    raw_label=raw_label.strip(),
+                    kind=kind,
+                    scheme=scheme,
+                    location=MatchLocation(page=page_number, line=line_index),
+                )
+            )
+
+    return matches
+
+
+def extract_numbering_matches(pdf_path: str) -> List[NumberingMatch]:
+    reader = PdfReader(pdf_path)
+    all_matches: List[NumberingMatch] = []
+
+    for page_number, page in enumerate(reader.pages, start=1):
+        text = page.extract_text() or ""
+        page_matches = list(iter_labels_in_page_text(text, page_number))
+        all_matches.extend(page_matches)
+
+    return all_matches
+
+
+def search_mixed_numbering_in_pdf(
+    pdf_path: str,
+) -> Tuple[bool, List[Tuple[str, Tuple[int, int]]]]:
+    all_matches = extract_numbering_matches(pdf_path)
+    if not all_matches:
+        return False, []
+
+    scheme_counter = Counter(m.scheme for m in all_matches)
+    if len(scheme_counter) <= 1:
+        return False, []
+
+    dominant_scheme, _ = scheme_counter.most_common(1)[0]
+    offending_schemes = {s for s in scheme_counter.keys() if s != dominant_scheme}
+
+    offending_matches: List[Tuple[str, Tuple[int, int]]] = []
+    for m in all_matches:
+        if m.scheme in offending_schemes:
+            loc = m.location
+            offending_matches.append((m.raw_label, (loc.page, loc.line)))
+
+    has_mixed = bool(offending_matches)
+    return has_mixed, offending_matches
+
+
+__all__ = [
+    "MatchLocation",
+    "NumberingMatch",
+    "extract_numbering_matches",
+    "search_mixed_numbering_in_pdf",
+]
+\end{lstlisting}
+
+\begin{lstlisting}[language=Python,caption={Точка входа GPT~5.1},captionpos=b]
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Check PDF documents for mixed illustration numbering schemes.\n"
+            "Allowed schemes are either only global (1, 2, 3, ...) or only "
+            "sectional (1.1, 1.2, ..., 2.1, 2.2, ...)."
+        )
+    )
+    parser.add_argument(
+        "path",
+        help="Path to a PDF file or to a directory containing PDF files.",
+    )
+    return parser.parse_args(argv)
+
+
+def _collect_pdf_paths(path: str) -> List[Path]:
+    target = Path(path)
+    if not target.exists():
+        raise FileNotFoundError(path)
+
+    if target.is_file():
+        if target.suffix.lower() != ".pdf":
+            raise ValueError(f"Not a PDF file: {target}")
+        return [target]
+
+    if target.is_dir():
+        pdfs = sorted(
+            p for p in target.iterdir()
+            if p.is_file() and p.suffix.lower() == ".pdf"
+        )
+        return pdfs
+
+    raise ValueError(f"Path is neither file nor directory: {target}")
+
+
+def _process_single_pdf(pdf_path: Path) -> int:
+    print(f"=== {pdf_path} ===")
+
+    try:
+        has_mixed, offending = search_mixed_numbering_in_pdf(str(pdf_path))
+    except FileNotFoundError:
+        print(f"Error: file not found: {pdf_path}", file=sys.stderr)
+        return 1
+    except Exception as exc:  
+        print(f"Error while processing PDF {pdf_path}: {exc}", file=sys.stderr)
+        return 1
+
+    if not has_mixed:
+        print("Mixed numbering: NO")
+        return 0
+
+    print("Mixed numbering: YES")
+    print("Offending labels (minority schemes):")
+    for label, (page, line) in offending:
+        print(f"  page {page}, line {line}: {label}")
+
+    return 0
+
+
+def main(argv: list[str] | None = None) -> NoReturn:
+    args = parse_args(argv)
+
+    try:
+        pdf_paths = _collect_pdf_paths(args.path)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        raise SystemExit(1)
+
+    if not pdf_paths:
+        print(f"No PDF files found for path: {args.path}", file=sys.stderr)
+        raise SystemExit(1)
+
+    exit_code = 0
+    for pdf_path in pdf_paths:
+        if len(pdf_paths) > 1:
+            print()
+        result = _process_single_pdf(pdf_path)
+        if result != 0:
+            exit_code = result
+
+    raise SystemExit(exit_code)
+
+
+if __name__ == "__main__":
+    main()
+\end{lstlisting}
+
+\clearpage
+
+\chapter*{ПРИЛОЖЕНИЕ Б}
+\addcontentsline{toc}{chapter}{ПРИЛОЖЕНИЕ Б}
+
+В данном приложении приведены примеры промптов, использованных при взаимодействии с большими языковыми моделями, а также фрагменты сгенерированных ими ответов с кодом для решения поставленной задачи проверки смешения типов нумерации иллюстрирующих элементов.
+
+\section*{Б.1. Промпт и ответ модели DeepSeek}
+\label{appB:deepseek_prompt}
+
+Пример промпта, отправленного модели DeepSeek:
+
+\begin{lstlisting}[caption={Промпт для модели DeepSeek},captionpos=b]
+Ты -- опытный разработчик на Python. Нужно написать один самодостаточный модуль,
+который проверяет PDF-документ на наличие смешения типов нумерации иллюстрирующих
+элементов (рисунков и таблиц).
+
+Контекст:
+- иллюстрирующие элементы -- это рисунки и таблицы;
+- подпись содержит ключевое слово ("Рисунок", "рис.", "Таблица", "табл.",
+  "Figure", "Fig.", "Table") и номер;
+- используются две схемы нумерации:
+    1) сквозная: 1, 2, 3, ...;
+    2) пораздельная: 1.1, 1.2, ..., 2.1, 2.2, ...
+
+Под "смешением" понимаем ситуацию, когда в одном документе одновременно
+встречаются подписи с разными схемами нумерации (сквозной и пораздельной),
+либо внутри одной группы элементов (только рисунки или только таблицы)
+используются разные схемы.
+
+Требуется:
+- прочитать PDF с помощью PyPDF2.PdfReader;
+- извлечь текст со всех страниц (page.extract_text()) и разбить его на строки;
+- для каждой строки найти подписи иллюстраций по регулярному выражению;
+- для каждой найденной подписи определить:
+    * тип элемента (figure/table),
+    * тип нумерации (global/sectional),
+    * координаты (страница, строка);
+- проанализировать все подписи и определить, есть ли смешение схем нумерации.
+
+Сделай функцию проверки (с сигнатурой на твой выбор), которая возвращает:
+- булев флаг наличия смешения;
+- список найденных "проблемных" подписей с указанием страницы и строки
+  (можно дополнительно включить тип элемента и тип нумерации).
+
+Дополнительно можно реализовать точку входа main(), которая:
+- принимает путь к PDF-файлу или каталогу;
+- находит все .pdf в каталоге (без рекурсии);
+- выводит краткий текстовый отчёт по каждому файлу (есть ли смешение и где именно).
+
+Требования к коду:
+- язык: Python 3;
+- библиотека для чтения PDF: PyPDF2;
+- использовать typing и аннотации типов;
+- при необходимости разбить решение на несколько вспомогательных функций;
+- аккуратно обрабатывать ошибки (нет файла, повреждённый PDF и т.п.);
+- выдать итоговый текст одного .py-файла без дополнительных пояснений.
+\end{lstlisting}
+
+Фрагмент ответа модели DeepSeek (часть с основной логикой поиска и классификации подписей):
+
+\begin{lstlisting}[language=Python,caption={Фрагмент ответа модели DeepSeek},captionpos=b]
+ILLUSTRATION_KEYWORDS = [
+    r"рис\.?",
+    r"рисунок",
+    r"табл\.?",
+    r"таблица",
+    r"fig\.?",
+    r"figure",
+    r"table",
+]
+
+LABEL_REGEX = re.compile(
+    rf"""
+    (?P<keyword>{'|'.join(ILLUSTRATION_KEYWORDS)})  
+    \s*                                            
+    (?P<number>\d+(?:\.\d+)*)                      
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+
+def _normalize_kind(keyword: str) -> str:
+    kw = keyword.lower()
+    if kw.startswith(("рис", "fig")):
+        return "figure"
+    if kw.startswith(("таб", "table")):
+        return "table"
+    return "other"
+
+
+def _detect_scheme(number: str) -> str:
+    return "sectional" if "." in number else "global"
+
+
+def _extract_labels(pdf_path: str) -> List[Dict]:
+    items: List[Dict] = []
+
+    with open(pdf_path, "rb") as file:
+        reader = PyPDF2.PdfReader(file)
+
+        for page_index, page in enumerate(reader.pages, start=1):
+            text = page.extract_text() or ""
+            lines = text.splitlines()
+
+            for line_index, line in enumerate(lines, start=1):
+                for match in LABEL_REGEX.finditer(line):
+                    keyword = match.group("keyword")
+                    number = match.group("number")
+                    raw = match.group(0).strip()
+
+                    kind = _normalize_kind(keyword)
+                    scheme = _detect_scheme(number)
+
+                    items.append(
+                        {
+                            "raw_label": raw,
+                            "kind": kind,
+                            "scheme": scheme,
+                            "number": number,
+                            "page": page_index,
+                            "line": line_index,
+                        }
+                    )
+
+    return items
+\end{lstlisting}
+
+\section*{Б.2. Промпт и ответ модели Gemini-3}
+\label{appB:gemini_prompt}
+
+Пример промпта, отправленного модели Gemini-3:
+
+\begin{lstlisting}[caption={Промпт для модели Gemini-3},captionpos=b]
+Ты -- опытный разработчик на Python. Нужно написать один самодостаточный модуль,
+который проверяет PDF-документ на наличие смешения типов нумерации иллюстрирующих
+элементов (рисунков и таблиц).
+
+Контекст:
+- иллюстрирующие элементы -- это рисунки и таблицы;
+- подпись содержит ключевое слово ("Рисунок", "рис.", "Таблица", "табл.",
+  "Figure", "Fig.", "Table") и номер;
+- используются две схемы нумерации:
+    1) сквозная: 1, 2, 3, ...;
+    2) пораздельная: 1.1, 1.2, ..., 2.1, 2.2, ...
+
+Под "смешением" понимаем ситуацию, когда в одном документе одновременно
+встречаются подписи с разными схемами нумерации (сквозной и пораздельной),
+либо внутри одной группы элементов (только рисунки или только таблицы)
+используются разные схемы.
+
+Требуется:
+- прочитать PDF с помощью PyPDF2.PdfReader;
+- извлечь текст со всех страниц (page.extract_text()) и разбить его на строки;
+- для каждой строки найти подписи иллюстраций по регулярному выражению;
+- для каждой найденной подписи определить:
+    * тип элемента (figure/table),
+    * тип нумерации (global/sectional),
+    * координаты (страница, строка);
+- проанализировать все подписи и определить, есть ли смешение схем нумерации.
+
+Сделай функцию проверки (с сигнатурой на твой выбор), которая возвращает:
+- булев флаг наличия смешения;
+- список найденных "проблемных" подписей с указанием страницы и строки
+  (можно дополнительно включить тип элемента и тип нумерации).
+
+Дополнительно можно реализовать точку входа main(), которая:
+- принимает путь к PDF-файлу или каталогу;
+- находит все .pdf в каталоге (без рекурсии);
+- выводит краткий текстовый отчёт по каждому файлу (есть ли смешение и где именно).
+
+Требования к коду:
+- язык: Python 3;
+- библиотека для чтения PDF: PyPDF2;
+- использовать typing и аннотации типов;
+- при необходимости разбить решение на несколько вспомогательных функций;
+- аккуратно обрабатывать ошибки (нет файла, повреждённый PDF и т.п.);
+- выдать итоговый текст одного .py-файла без дополнительных пояснений.
+\end{lstlisting}
+
+Фрагмент ответа модели Gemini-3 (основная функция проверки):
+
+\begin{lstlisting}[language=Python,caption={Фрагмент ответа модели Gemini-3},captionpos=b]
+def check_mixed_numbering(pdf_path: str) -> Tuple[bool, List[Tuple[str, int, int]]]:
+    sequential_regex = re.compile(
+        r'(?:Рисунок|Таблица|Figure|Table)\s+\d+(?!\.)\b',
+        re.IGNORECASE,
+    )
+    section_regex = re.compile(
+        r'(?:Рисунок|Таблица|Figure|Table)\s+\d+(\.\d+)+',
+        re.IGNORECASE,
+    )
+
+    sequential_matches: List[Tuple[str, int, int]] = []
+    section_matches: List[Tuple[str, int, int]] = []
+
+    with open(pdf_path, "rb") as file:
+        reader = PyPDF2.PdfReader(file)
+        for page_num, page in enumerate(reader.pages, start=1):
+            text = page.extract_text() or ""
+            for line_num, line in enumerate(text.splitlines(), start=1):
+                for m in sequential_regex.finditer(line):
+                    sequential_matches.append((m.group(0), page_num, line_num))
+                for m in section_regex.finditer(line):
+                    section_matches.append((m.group(0), page_num, line_num))
+
+    is_mixed = bool(sequential_matches and section_matches)
+    all_matches = sequential_matches + section_matches if is_mixed else []
+    all_matches.sort(key=lambda x: (x[1], x[2]))
+
+    return is_mixed, all_matches
+\end{lstlisting}
+
+\section*{Б.3. Промпт и ответ модели GPT~5.1}
+\label{appB:gpt_prompt}
+
+Пример промпта, отправленного модели GPT~5.1:
+
+\begin{lstlisting}[caption={Промпт для модели GPT~5.1},captionpos=b]
+Ты -- опытный разработчик на Python. Нужно написать один самодостаточный модуль,
+который проверяет PDF-документ на наличие смешения типов нумерации иллюстрирующих
+элементов (рисунков и таблиц).
+
+Контекст:
+- иллюстрирующие элементы -- это рисунки и таблицы;
+- подпись содержит ключевое слово ("Рисунок", "рис.", "Таблица", "табл.",
+  "Figure", "Fig.", "Table") и номер;
+- используются две схемы нумерации:
+    1) сквозная: 1, 2, 3, ...;
+    2) пораздельная: 1.1, 1.2, ..., 2.1, 2.2, ...
+
+Под "смешением" понимаем ситуацию, когда в одном документе одновременно
+встречаются подписи с разными схемами нумерации (сквозной и пораздельной),
+либо внутри одной группы элементов (только рисунки или только таблицы)
+используются разные схемы.
+
+Требуется:
+- прочитать PDF с помощью PyPDF2.PdfReader;
+- извлечь текст со всех страниц (page.extract_text()) и разбить его на строки;
+- для каждой строки найти подписи иллюстраций по регулярному выражению;
+- для каждой найденной подписи определить:
+    * тип элемента (figure/table),
+    * тип нумерации (global/sectional),
+    * координаты (страница, строка);
+- проанализировать все подписи и определить, есть ли смешение схем нумерации.
+
+Сделай функцию проверки (с сигнатурой на твой выбор), которая возвращает:
+- булев флаг наличия смешения;
+- список найденных "проблемных" подписей с указанием страницы и строки
+  (можно дополнительно включить тип элемента и тип нумерации).
+
+Дополнительно можно реализовать точку входа main(), которая:
+- принимает путь к PDF-файлу или каталогу;
+- находит все .pdf в каталоге (без рекурсии);
+- выводит краткий текстовый отчёт по каждому файлу (есть ли смешение и где именно).
+
+Требования к коду:
+- язык: Python 3;
+- библиотека для чтения PDF: PyPDF2;
+- использовать typing и аннотации типов;
+- при необходимости разбить решение на несколько вспомогательных функций;
+- аккуратно обрабатывать ошибки (нет файла, повреждённый PDF и т.п.);
+- выдать итоговый текст одного .py-файла без дополнительных пояснений.
+\end{lstlisting}
+
+Фрагмент ответа модели GPT~5.1 (ключевая функция поиска смешения нумерации):
+
+\begin{lstlisting}[language=Python,caption={Фрагмент ответа модели GPT~5.1},captionpos=b]
+def search_mixed_numbering_in_pdf(
+    pdf_path: str,
+) -> Tuple[bool, List[Tuple[str, Tuple[int, int]]]]:
+    all_matches = extract_numbering_matches(pdf_path)
+    if not all_matches:
+        return False, []
+
+    scheme_counter = Counter(m.scheme for m in all_matches)
+    if len(scheme_counter) <= 1:
+        return False, []
+
+    dominant_scheme, _ = scheme_counter.most_common(1)[0]
+    offending_schemes = {s for s in scheme_counter.keys() if s != dominant_scheme}
+
+    offending_matches: List[Tuple[str, Tuple[int, int]]] = []
+    for m in all_matches:
+        if m.scheme in offending_schemes:
+            loc = m.location
+            offending_matches.append((m.raw_label, (loc.page, loc.line)))
+
+    has_mixed = bool(offending_matches)
+    return has_mixed, offending_matches
+\end{lstlisting}
+
+\clearpage
