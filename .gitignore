@@ -23,4 +23,5 @@ examples/
 __pycache__/
 parametrization_class1.txt
 samples/
+files_with_errors/
 
