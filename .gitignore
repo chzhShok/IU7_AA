@@ -24,4 +24,7 @@ __pycache__/
 parametrization_class1.txt
 samples/
 files_with_errors/
+lab_05/result
+lab_05/logs
+lab_05/graphs/
 

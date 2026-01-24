@@ -1,0 +1,249 @@
+\chapter{Технологическая часть}
+
+\section{Средства реализации}
+
+Для реализации алгоритмов последовательной и конвейерной обработки заявок был выбран язык программирования \texttt{C++20}, поскольку он соответствует требованиям лабораторной работы и предоставляет необходимые средства для работы с нативными потоками. 
+
+Измерение времени выполнения алгоритмов осуществляется с использованием стандартной библиотеки \texttt{<chrono>} и вспомогательного класса \texttt{Timer}. Разработка проводилась в среде \texttt{CLion}, сборка -- с помощью \texttt{CMake}.
+
+\section{Инструменты разработки}
+
+\subsection{Используемые библиотеки}
+Все реализации используют только стандартную библиотеку C++20:
+\begin{itemize}
+	\item \texttt{std::vector}, \texttt{std::string}, \texttt{std::unordered\_map} -- хранение графа и рабочих структур;
+	\item \texttt{std::queue} -- реализация очередей заявок;
+	\item \texttt{std::thread} -- создание и управление нативными потоками для конвейерной обработки;
+	\item \texttt{std::mutex}, \texttt{std::lock\_guard}, \texttt{std::unique\_lock} -- синхронизация доступа к разделяемым данным;
+	\item \texttt{std::condition\_variable} -- блокирующее ожидание появления заявок в очередях конвейера;
+	\item \texttt{std::filesystem} -- работа с путями и директориями (поиск корня проекта, создание папки результатов);
+	\item \texttt{std::chrono} -- замер времени работы алгоритмов.
+\end{itemize}
+
+\section{Описание используемых структур данных}
+
+\subsection{Структура графа}
+Для представления ориентированного взвешенного графа используется класс \texttt{Graph}, в котором вершины хранятся по индексам, а рёбра -- в виде списков смежности:
+
+\begin{lstlisting}[language=C++,caption={Структура графа}]
+class Graph {
+public:
+    std::vector<std::vector<std::pair<int, uint32_t>>> adj;
+    std::unordered_map<std::string, int> name_to_idx;
+    std::vector<std::string> idx_to_name;
+
+    int ensure_node(const std::string &name);
+    std::optional<int> find_node(const std::string &name) const;
+
+    void add_edge(int u, int v, uint32_t w);
+
+    size_t size() const { return adj.size(); }
+
+    static Graph load_from_dot(const std::string &path);
+};
+\end{lstlisting}
+
+\subsection{Структура заявки и события конвейера}
+Для описания заявки, проходящей через конвейер, используется структура \texttt{Request}:
+
+\begin{lstlisting}[language=C++,caption={Структура Request}]
+struct Request {
+    int id{};
+    std::string graph_file;
+    std::string start_node_name;
+    std::vector<std::string> target_node_names;
+
+    Graph graph;
+    int start_index{-1};
+    std::vector<int> target_indices;
+
+    std::vector<uint64_t> dist;
+    std::vector<int> parent;
+};
+\end{lstlisting}
+
+Для журналирования работы конвейера используется перечисление \texttt{EventType} и структура \texttt{Event}:
+
+\begin{lstlisting}[language=C++,caption={Структуры EventType и Event}]
+enum class EventType {
+    Start,
+    End
+};
+
+struct Event {
+    long long time_us{};
+    int request_id{};
+    int device_id{};
+    EventType type{};
+};
+\end{lstlisting}
+
+\subsection{Блокирующая очередь заявок}
+Для связи между стадиями конвейера реализован шаблонный класс \texttt{BlockingQueue}, инкапсулирующий очередь, мьютекс и условную переменную:
+
+\begin{lstlisting}[language=C++,caption={Класс BlockingQueue}]
+template<typename T>
+class BlockingQueue {
+public:
+    void push(T value) {
+        {
+            std::lock_guard<std::mutex> lg(m_);
+            q_.push(std::move(value));
+        }
+        cv_.notify_one();
+    }
+
+    T pop() {
+        std::unique_lock<std::mutex> lk(m_);
+        cv_.wait(lk, [&] { return !q_.empty(); });
+        T v = std::move(q_.front());
+        q_.pop();
+        return v;
+    }
+
+private:
+    std::queue<T> q_;
+    std::mutex m_;
+    std::condition_variable cv_;
+};
+\end{lstlisting}
+
+\section{Реализация}
+
+\subsection{Последовательная обработка заявок}
+Фрагмент кода, отвечающий за многократный запуск алгоритма и формирование отчётов:
+
+\begin{lstlisting}[language=C++,caption={Последовательная обработка N заявок}]
+for (int i = 0; i < N; ++i) {
+    Graph g = Graph::load_from_dot(graph_file);
+
+    auto start_id_opt = g.find_node(start_vertex_str);
+    if (!start_id_opt) {
+        throw std::runtime_error("Start node not found in graph");
+    }
+    int start_index = *start_id_opt;
+
+    std::vector<int> target_indices;
+    for (const auto &name: target_vertex_strs) {
+        auto id = g.find_node(name);
+        if (!id) {
+            throw std::runtime_error("Target node not found in graph");
+        }
+        target_indices.push_back(*id);
+    }
+
+    DijkstraSequential seq(g, start_index);
+    auto res = seq.run();
+
+    // формирование имени файла и вывод результата опущены для краткости
+}
+\end{lstlisting}
+
+\subsection{Конвейерная обработка заявок}
+Фрагмент, создающий очереди, формирующий поток заявок и запускающий три обслуживающих устройства:
+
+\begin{lstlisting}[language=C++,caption={Запуск конвейера обработки заявок}]
+BlockingQueue<std::shared_ptr<Request>> q1, q2, q3;
+std::vector<Event> events;
+std::mutex events_mutex;
+
+auto log_event = [&](int device_id, int request_id, EventType type) {
+    const auto now = Clock::now();
+    long long dt = std::chrono::duration_cast<Microseconds>(now-t0).count();
+    Event ev{dt, request_id, device_id, type};
+    std::lock_guard<std::mutex> lg(events_mutex);
+    events.push_back(ev);
+};
+
+// генератор заявок
+for (int i = 0; i < N; ++i) {
+    auto req = std::make_shared<Request>();
+    req->id = i;
+    req->graph_file = graph_file;
+    req->start_node_name = start_vertex_str;
+    req->target_node_names = target_vertex_strs;
+    q1.push(req);
+}
+
+// запуск трёх этапов конвейера (ОУ1, ОУ2, ОУ3)
+std::thread ou1(/* обработка заявок из q1 и передача в q2 */);
+std::thread ou2(/* запуск Дейкстры и передача в q3 */);
+std::thread ou3(/* формирование отчётов по заявкам из q3 */);
+
+ou1.join();
+ou2.join();
+ou3.join();
+\end{lstlisting}
+
+После завершения конвейера программа сортирует журнал событий по времени и выводит временную диаграмму работы обслуживающих устройств, а также суммарное время работы конвейера.
+
+\section{Функциональные тесты}
+
+Для проверки корректности реализации были проведены функциональные тесты. Тесты выполнялись как в линейном режиме, так и в конвейерном режиме, и результаты обоих режимов сравнивались с ожидаемыми.
+
+\begin{table}[H]
+	\centering
+	\caption{Функциональные тесты для алгоритма поиска кратчайших путей}
+	\label{table:functional_tests}
+	\begin{tabular}{|p{0.8cm}|p{3.2cm}|p{3.2cm}|p{3.2cm}|p{3.2cm}|}
+		\hline
+		№ & Входные данные & Ожидаемый результат & Линейная обработка & Конвейерная обработка \\
+		\hline
+		1 & Граф: A->B[2], A->C[1];
+		Старт: A;
+		Цели: B, C &
+		Расстояния: B=2, C=1;
+		Кратчайший: C=1 &
+		Совпадает с ожидаемым &
+		Совпадает с ожидаемым и с линейной обработкой \\
+		\hline
+		2 & Граф: A->B[3], B->C[1], A->C[5];
+		Старт: A;
+		Цели: C &
+		Расстояние: C=4;
+		Путь: A->B->C &
+		Совпадает (расстояние и путь) &
+		Совпадает (расстояние и путь) \\
+		\hline
+		3 & Граф: A->B[1], B->C[1], C->D[1];
+		Старт: A;
+		Цели: D &
+		Расстояние: D=3;
+		Путь: A->B->C->D &
+		Совпадает &
+		Совпадает \\
+		\hline
+		4 & Граф: A->B[2], C->D[1];
+		Старт: A;
+		Цели: D &
+		Расстояние: D=$\infty$ &
+		D недостижима (как ожидается) &
+		D недостижима (как ожидается) \\
+		\hline
+		5 & Граф: A->A[1];
+		Старт: A;
+		Цели: A &
+		Расстояние: A=0;
+		Путь: A &
+		Совпадает &
+		Совпадает \\
+		\hline
+	\end{tabular}
+\end{table}
+
+Во всех тестах результаты линейной и конвейерной обработок совпали между собой и с ожидаемыми значениями, что подтверждает корректность реализации поиска кратчайших путей и отсутствие искажений при прохождении заявок через конвейер.
+
+\section*{Вывод}
+
+В технологической части были описаны структуры данных, использованные для реализации последовательного и конвейерного алгоритмов поиска кратчайших путей, а также приведены ключевые фрагменты кода. 
+
+Реализованы:
+\begin{itemize}
+	\item структура графа с хранением рёбер в виде списков смежности;
+	\item классический последовательный алгоритм Дейкстры;
+	\item конвейерная схема обработки набора заявок с тремя обслуживающими устройствами и блокирующими очередями.
+\end{itemize}
+
+Функциональные тесты показали, что результаты последовательной и конвейерной обработок совпадают на различных типах графов, что подтверждает корректность реализованных алгоритмов.
+
+\clearpage
